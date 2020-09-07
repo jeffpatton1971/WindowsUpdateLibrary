@@ -26,17 +26,26 @@ namespace WindowsUpdateLibrary
             [Parameter(Mandatory = false,
                 HelpMessage = "Please provide a valid search criteria")]
             [ValidateNotNullOrEmpty]
-            public string Criteria = "IsInstalled=0 and Type='Software'";
+            public string Criteria = "DeploymentAction=* AND Type='Software' AND IsInstalled=0";
 
             [Parameter(Mandatory = false,
-                HelpMessage = "If present get updates from Microsoft Servers")]
+                HelpMessage = "If present, get updates from Microsoft Servers")]
             public SwitchParameter FromMicrosoft;
+
+            [Parameter(Mandatory = false,
+            HelpMessage = "If present, include superseded updates")]
+            public SwitchParameter IncludeSuperseded;
+
 
             public ISearchResult searchResult;
 
             protected override void BeginProcessing()
             {
                 base.BeginProcessing();
+                if (IncludeSuperseded)
+                {
+                    Globals.updateSearcher.IncludePotentiallySupersededUpdates = true;
+                }
             }
 
             protected override void ProcessRecord()
@@ -190,6 +199,50 @@ namespace WindowsUpdateLibrary
                 {
                     WriteObject(historyEntry);
                 }
+            }
+        }
+
+        [Cmdlet(VerbsCommon.Copy, "wuaContentToCache")]
+        public class Copy_wuaContentToCache : PSCmdlet
+        {
+            [Parameter(Mandatory = true, ValueFromPipeline = true,
+                HelpMessage = "The file path(s) to the update content")]
+            [ValidateNotNullOrEmpty]
+            public string[] FilePath;
+
+            [Parameter(Mandatory = true, ValueFromPipeline = true,
+                HelpMessage = "The update for which to provision content")]
+            [ValidateCount(1,1)]
+            public WUApiLib.UpdateCollection Update;
+
+            WUApiLib.StringCollection ContentToCopy = new WUApiLib.StringCollection();
+
+            protected override void BeginProcessing()
+            {
+                base.BeginProcessing();
+            }
+
+            protected override void ProcessRecord()
+            {
+                base.ProcessRecord();
+                foreach (string thisFilePath in FilePath)
+                {
+                    ContentToCopy.Add(thisFilePath);
+                }
+                
+                foreach (WUApiLib.IUpdate2 thisUpdate in Update)
+                {
+                    if (!thisUpdate.IsDownloaded)
+                    {
+                        WriteVerbose("PROVISION CONTENT : " + thisUpdate.Title);
+                        thisUpdate.CopyToCache(ContentToCopy);
+                    }
+                }
+            }
+
+            protected override void EndProcessing()
+            {
+                base.EndProcessing();
             }
         }
 
